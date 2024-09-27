@@ -101,6 +101,9 @@ set(AMP_DEPENDENCY_INCLUDE_DIRS
 if (AMP_BUILD_LIB)
     message("Building AMPCore library")
 
+    file(MAKE_DIRECTORY ${AMP_OS_INSTALL_DIR})
+    file(MAKE_DIRECTORY ${AMP_EXECUTABLE_DIRECTORY})
+
     # Dependencies
     set(BUILD_SHARED_LIBS ON) # Toggle on for YAML
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dependencies/yaml-cpp)
@@ -124,4 +127,7 @@ add_subdirectory(src/public)
 add_subdirectory(ws)
 
 # Copy the executables out of the install directory
-file(COPY ${AMP_EXECUTABLE_DIRECTORY} DESTINATION ${AMP_EXECUTABLE_OUTPUT_DIRECTORY})
+file(INSTALL ${AMP_EXECUTABLE_DIRECTORY} 
+    DESTINATION ${AMP_EXECUTABLE_OUTPUT_DIRECTORY}
+    PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+)
