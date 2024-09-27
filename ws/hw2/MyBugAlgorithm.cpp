@@ -1,4 +1,6 @@
 #include "MyBugAlgorithm.h"
+#include "GeometryHelper.h"
+#include <algorithm>
 
 // Function to check for line segment intersection
 // Returns optional intersection point if found
@@ -156,19 +158,43 @@ int findVertexIndex(const std::vector<Eigen::Vector2d>& vertices, const Eigen::V
 
 // Function to check if moving from point P to T intersects the polygon boundary
 bool willIntersectBoundary(const Eigen::Vector2d& P, const Eigen::Vector2d& T, 
-                           const std::vector<Eigen::Vector2d>& polygon) {
+                           const std::vector<Eigen::Vector2d>& polygon, double max_distance) {
     size_t n = polygon.size();
 
     for (size_t i = 0; i < n; ++i) {
         Eigen::Vector2d A = polygon[i];
         Eigen::Vector2d B = polygon[(i + 1) % n]; // Wrap around to form closed polygon
 
-        if (segmentIntersect(P, T, A, B)) {
+        auto intersect = segmentIntersect(P, T, A, B);
+        if (intersect && ((P - *intersect).norm() > 1e-6)) {
             return true;
         }
     }
 
     return false;
+}
+
+bool isPointInPolygon(const Eigen::Vector2d& point, const std::vector<Eigen::Vector2d>& polygon) {
+    size_t n = polygon.size();
+    bool inside = false;
+
+    for (size_t i = 0; i < n; ++i) {
+        Eigen::Vector2d a = polygon[i];
+        Eigen::Vector2d b = polygon[(i + 1) % n];
+
+        // Check if the point is on an edge of the polygon
+        if (isPointOnSegment(point, a, b)) {
+            return false; // The point is on the boundary
+        }
+
+        // Ray-casting logic: count the number of times a ray from the point intersects the polygon's edges
+        if (((a.y() > point.y()) != (b.y() > point.y())) &&
+            (point.x() < (b.x() - a.x()) * (point.y() - a.y()) / (b.y() - a.y()) + a.x())) {
+            inside = !inside;
+        }
+    }
+
+    return inside;
 }
 
 double calculatePathLength(const std::vector<Eigen::Vector2d>& waypoints) {
@@ -196,91 +222,220 @@ void printVertices(const std::vector<Eigen::Vector2d>& vertices) {
     }
 }
 
+// Function to find all intersection points of a segment with a polygon
+std::vector<Eigen::Vector2d> findAllIntersections(const Eigen::Vector2d& segmentStart, const Eigen::Vector2d& segmentEnd, const std::vector<Eigen::Vector2d>& polygon) {
+    std::vector<Eigen::Vector2d> intersections;
+
+    size_t numVertices = polygon.size();
+    for (size_t i = 0; i < numVertices; ++i) {
+        Eigen::Vector2d a = polygon[i];
+        Eigen::Vector2d b = polygon[(i + 1) % numVertices];
+
+        auto intersection = segmentIntersect(segmentStart, segmentEnd, a, b);
+        if (intersection && findVertexIndex(intersections, *intersection) == -1) {
+            intersections.push_back(*intersection);
+        }
+    }
+
+    return intersections;
+}
+
+auto prepareObstacles(const amp::Problem2D& problem)
+{
+    auto obstacles = problem.obstacles;
+
+    // std::vector<Eigen::Vector2d> bottom = {
+    //     {problem.x_min, problem.y_min}, {problem.x_max+1, problem.y_min},
+    //     {problem.x_min, problem.y_min-1}, {problem.x_max+1, problem.y_min-1}
+    // };
+    // std::vector<Eigen::Vector2d> top = {
+    //     {problem.x_min-1, problem.y_max}, {problem.x_max, problem.y_max},
+    //     {problem.x_min-1, problem.y_max+1}, {problem.x_max, problem.y_max+1}
+    // };
+    // std::vector<Eigen::Vector2d> left = {
+    //     {problem.x_min-1, problem.y_max+1}, {problem.x_min, problem.y_max+1},
+    //     {problem.x_min-1, problem.y_min}, {problem.x_min, problem.y_min}
+    // };
+    // std::vector<Eigen::Vector2d> right = {
+    //     {problem.x_max, problem.y_max+1}, {problem.x_max+1, problem.y_max+1},
+    //     {problem.x_max, problem.y_min-1}, {problem.x_max+1, problem.y_min-1}
+    // };
+
+    // std::reverse(bottom.begin(), bottom.end());
+    // obstacles.push_back(bottom);
+    // std::reverse(top.begin(), top.end());
+    // obstacles.push_back(top);
+    // std::reverse(left.begin(), left.end());
+    // obstacles.push_back(left);
+    // std::reverse(right.begin(), right.end());
+    // obstacles.push_back(right);
+
+    double displacement = 0.1;
+    return mergePolygons(obstacles, displacement);
+}
+
 // Implement your methods in the `.cpp` file, for example:
 amp::Path2D Bug1Algorithm::plan(const amp::Problem2D& problem)
 {
-        amp::Path2D path;
-        path.waypoints.push_back(problem.q_init);
-        
-        auto current = problem.q_init;
+    auto obstacles = prepareObstacles(problem);
 
-        for (auto maxIters = 0; maxIters < 10000; maxIters++)
+    amp::Path2D path;
+    path.waypoints.push_back(problem.q_init);
+    
+    auto current = problem.q_init;
+
+    for (auto maxIters = 0; maxIters < 10000; maxIters++)
+    {
+        auto hit = findFirstHit(current, problem.q_goal, obstacles);
+
+        if (hit)
+        {      
+            const auto& vertices = hit->obstacle->verticesCCW();
+            int vertexCount = vertices.size();
+
+            std::vector<Eigen::Vector2d> new_waypoints;
+
+            if (findVertexIndex(vertices, hit->intersection_point) == -1)
+            {
+                new_waypoints.push_back(hit->intersection_point);
+            }
+
+            // Go through every single vertex
+            for (int i = 0; i < vertexCount; ++i) {
+                const Eigen::Vector2d& vertex = vertices.at((vertexCount + hit->vertex_on_left - i) % vertexCount);
+                new_waypoints.push_back(vertex);
+            }
+
+
+            Eigen::Vector2d leave_point = closestPointOnPolygon(hit->obstacle->verticesCCW(), problem.q_goal);
+
+            auto mutableVertices = hit->obstacle->verticesCCW();
+            insertVertexInPolygon(mutableVertices, hit->intersection_point);
+            insertVertexInPolygon(mutableVertices, leave_point);
+            vertexCount = mutableVertices.size();
+
+            auto leave_i = findVertexIndex(mutableVertices, leave_point);
+            auto hit_i = findVertexIndex(mutableVertices, hit->intersection_point);
+
+            amp::Path2D path_option_1, path_option_2;
+            for (int i = 0; i < vertexCount; ++i) {
+                auto vertex_index = (hit_i + i) % vertexCount;
+                const Eigen::Vector2d& vertex = mutableVertices.at(vertex_index);
+                path_option_1.waypoints.push_back(vertex);
+                if (vertex_index == leave_i) break;
+            }
+            for (int i = 0; i < vertexCount; ++i) {
+                auto vertex_index =(vertexCount + hit_i - i) % vertexCount;
+                const Eigen::Vector2d& vertex = mutableVertices.at(vertex_index);
+                path_option_2.waypoints.push_back(vertex);
+                if (vertex_index == leave_i) break;
+            }
+
+            auto& selected_path = calculatePathLength(path_option_1.waypoints) < calculatePathLength(path_option_2.waypoints) ? path_option_1 : path_option_2;
+            new_waypoints.insert(new_waypoints.end(), selected_path.waypoints.begin(), selected_path.waypoints.end());
+
+            path.waypoints.insert(path.waypoints.end(), new_waypoints.begin(), new_waypoints.end());
+
+            Eigen::Vector2d slightly_out_leave_point = leave_point;
+            slightly_out_leave_point += (problem.q_goal - leave_point).normalized() * 1e-5;
+
+            if (willIntersectBoundary(slightly_out_leave_point, problem.q_goal, hit->obstacle->verticesCCW()))
+            {
+                path.valid = false;
+                return path;
+            }
+
+            current = slightly_out_leave_point;
+        }
+        else
         {
-            auto hit = findFirstHit(current, problem.q_goal, problem.obstacles);
+            path.waypoints.push_back(problem.q_goal);
+            printVertices(path.waypoints);
+            path.valid = true;
+            return path;
+        }
+    }
 
-            if (hit)
-            {       
-                LOG("Hit!");
-                const auto& vertices = hit->obstacle->verticesCCW();
-                int vertexCount = vertices.size();
+    throw std::runtime_error("Endless iteration");
+}
 
-                if (findVertexIndex(vertices, hit->intersection_point) == -1)
+// Implement your methods in the `.cpp` file, for example:
+amp::Path2D Bug2Algorithm::plan(const amp::Problem2D& problem)
+{
+    auto obstacles = prepareObstacles(problem);
+
+    amp::Path2D path;
+    path.waypoints.push_back(problem.q_init);
+    
+    auto current = problem.q_init;
+
+    for (auto maxIters = 0; maxIters < 10000; maxIters++)
+    {
+        auto hit = findFirstHit(current, problem.q_goal, obstacles);
+
+        if (hit)
+        {       
+            double targetDist = (current - problem.q_goal).norm();
+
+            const auto& vertices = hit->obstacle->verticesCCW();
+            auto mutableVertices = vertices;
+
+            auto intersections = findAllIntersections(current, problem.q_goal, vertices);
+
+            for (auto&& intersection : intersections)
+            {
+                insertVertexInPolygon(mutableVertices, intersection);
+            }
+
+            int vertexCount = mutableVertices.size();
+
+            auto hit_i = findVertexIndex(mutableVertices, hit->intersection_point);
+
+            for (int i = 0; i < vertexCount; ++i) {
+                auto vertex_index = (vertexCount + hit_i - i) % vertexCount;
+                const Eigen::Vector2d& vertex = mutableVertices.at(vertex_index);
+                path.waypoints.push_back(vertex);
+
+                if (
+                    i > 0
+                    && findVertexIndex(intersections, vertex) > -1 
+                    && (vertex - problem.q_goal).norm() < targetDist
+                )
                 {
-                    path.waypoints.push_back(hit->intersection_point);
+                    Eigen::Vector2d slightly_out_vertex = vertex;
+                    slightly_out_vertex += (problem.q_goal - vertex).normalized() * 1e-3;
+
+                    // We cannot leave! so just keep moving but remember this new target distance
+                    if (isPointInPolygon(slightly_out_vertex, hit->obstacle->verticesCCW()))
+                    {
+                        targetDist = (vertex - problem.q_goal).norm();
+                    }
+                    else
+                    {
+                        // Leave!
+                        break;
+                    }
                 }
-
-                // Go through every single vertex
-                for (int i = 0; i < vertexCount; ++i) {
-                    const Eigen::Vector2d& vertex = vertices.at((vertexCount + hit->vertex_on_left - i) % vertexCount);
-                    path.waypoints.push_back(vertex);
-                }
-
-                LOG("Hit point " << hit->intersection_point.transpose());
-
-                Eigen::Vector2d leave_point = closestPointOnPolygon(hit->obstacle->verticesCCW(), problem.q_goal);
-                LOG("Leave point " << leave_point.transpose());
-
-                auto mutableVertices = hit->obstacle->verticesCCW();
-                insertVertexInPolygon(mutableVertices, hit->intersection_point);
-                insertVertexInPolygon(mutableVertices, leave_point);
-                vertexCount = mutableVertices.size();
-
-                auto leave_i = findVertexIndex(mutableVertices, leave_point);
-                auto hit_i = findVertexIndex(mutableVertices, hit->intersection_point);
-
-                amp::Path2D path_option_1, path_option_2;
-                for (int i = 0; i < vertexCount; ++i) {
-                    auto vertex_index = (hit_i + i) % vertexCount;
-                    const Eigen::Vector2d& vertex = mutableVertices.at(vertex_index);
-                    path_option_1.waypoints.push_back(vertex);
-                    if (vertex_index == leave_i) break;
-                }
-                for (int i = 0; i < vertexCount; ++i) {
-                    auto vertex_index =(vertexCount + hit_i - i) % vertexCount;
-                    const Eigen::Vector2d& vertex = mutableVertices.at(vertex_index);
-                    path_option_2.waypoints.push_back(vertex);
-                    if (vertex_index == leave_i) break;
-                }
-
-                std::cout << "Option 1" << std::endl;
-                printVertices(path_option_1.waypoints);
-
-                std::cout << std::endl << "Option 2" << std::endl;
-                printVertices(path_option_2.waypoints);
-
-                auto& selected_path = calculatePathLength(path_option_1.waypoints) < calculatePathLength(path_option_2.waypoints) ? path_option_1 : path_option_2;
-                path.waypoints.insert(path.waypoints.end(), selected_path.waypoints.begin(), selected_path.waypoints.end());
-
-                Eigen::Vector2d slightly_out_leave_point = leave_point;
-                slightly_out_leave_point += (problem.q_goal - leave_point).normalized() * 1e-5;
-
-                if (willIntersectBoundary(slightly_out_leave_point, problem.q_goal, hit->obstacle->verticesCCW()))
+                
+                if (i == vertexCount-1) // we are back at beginning!
                 {
                     path.valid = false;
                     return path;
                 }
+            }
 
-                current = slightly_out_leave_point;
-            }
-            else
-            {
-                path.waypoints.push_back(problem.q_goal);
-                LOG("FOUND PATH!");
-                printVertices(path.waypoints);
-                path.valid = true;
-                return path;
-            }
+            current = path.waypoints.back();
+            // nudge forward a bit so no collision with previous obstacle
+            current += (problem.q_goal - current).normalized() * 1e-5;
         }
-
-        throw std::runtime_error("Endless iteration");
+        else
+        {
+            path.waypoints.push_back(problem.q_goal);
+            printVertices(path.waypoints);
+            path.valid = true;
+            return path;
+        }
     }
+
+    throw std::runtime_error("Endless iteration");
+}

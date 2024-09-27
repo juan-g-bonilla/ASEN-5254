@@ -37,7 +37,7 @@ int findVertexIndex(const std::vector<Eigen::Vector2d>& vertices, const Eigen::V
 
 // Function to check if moving from point P to T intersects the polygon boundary
 bool willIntersectBoundary(const Eigen::Vector2d& P, const Eigen::Vector2d& T, 
-                           const std::vector<Eigen::Vector2d>& polygon);
+                           const std::vector<Eigen::Vector2d>& polygon, double max_distance = std::numeric_limits<double>::max());
 
 void printVertices(const std::vector<Eigen::Vector2d>& vertices);
 
@@ -45,6 +45,14 @@ double calculatePathLength(const std::vector<Eigen::Vector2d>& waypoints);
 
 /// @brief Declare your bug algorithm class here. Note this class derives the bug algorithm class declared in HW2.h
 class Bug1Algorithm : public amp::BugAlgorithm 
+{
+public:
+    virtual amp::Path2D plan(const amp::Problem2D& problem) override;
+
+};
+
+/// @brief Declare your bug algorithm class here. Note this class derives the bug algorithm class declared in HW2.h
+class Bug2Algorithm : public amp::BugAlgorithm 
 {
 public:
     virtual amp::Path2D plan(const amp::Problem2D& problem) override;
