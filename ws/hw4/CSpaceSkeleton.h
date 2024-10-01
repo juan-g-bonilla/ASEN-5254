@@ -22,11 +22,13 @@ class MyGridCSpace2D : public amp::GridCSpace2D {
 class MyManipulatorCSConstructor : public amp::ManipulatorCSConstructor {
     public:
         // To make things easy, add the number of cells as a ctor param so you can easily play around with it
-        MyManipulatorCSConstructor(std::size_t cells_per_dim) : m_cells_per_dim(cells_per_dim) {}
+        MyManipulatorCSConstructor(std::size_t cells_per_dim) : m_cells_per_dim(cells_per_dim), 
+         grid(cells_per_dim, cells_per_dim, 0, 2*M_PI, 0, 2*M_PI) {}
 
         // Override this method for computing all of the boolean collision values for each cell in the cspace
         virtual std::unique_ptr<amp::GridCSpace2D> construct(const amp::LinkManipulator2D& manipulator, const amp::Environment2D& env) override;
 
     private:
         std::size_t m_cells_per_dim;
+        MyGridCSpace2D grid;
 };
