@@ -6,30 +6,44 @@
 // Include the correct homework header
 #include "hw/HW5.h"
 
-class MyGDAlgorithm : public amp::GDAlgorithm {
-	public:
-		// Consider defining a class constructor to easily tune parameters, for example: 
-		MyGDAlgorithm(double d_star, double zetta, double Q_star, double eta) :
-			d_star(d_star),
-			zetta(zetta),
-			Q_star(Q_star),
-			eta(eta) {}
+#include "GeometryHelper.h"
 
-		// Override this method to solve a given problem.
-		virtual amp::Path2D plan(const amp::Problem2D& problem) override;
-	private:
-		double d_star, zetta, Q_star, eta;
-		// Add additional member variables here...
+struct PotentialConfig
+{
+	double d_star, zetta, Q_star, eta;
 };
 
 class MyPotentialFunction : public amp::PotentialFunction2D {
-    public:
-		// Returns the potential function value (height) for a given 2D point. 
-        virtual double operator()(const Eigen::Vector2d& q) const override {
-            return q[0] * q[0] + q[1] * q[1];
-        }
+public:
+	MyPotentialFunction(const amp::Problem2D& problem, PotentialConfig config);
 
-		virtual Eigen::Vector2d getGradient(const Eigen::Vector2d& q) const override {
-            return Eigen::Vector2d(q[0] * q[0],  q[1] * q[1]);
-        }
+	// Returns the potential function value (height) for a given 2D point. 
+	virtual double operator()(const Eigen::Vector2d& q) const override;
+
+	Eigen::Vector2d getGradient(const Eigen::Vector2d& x, double h = 1e-3) const override;
+
+private:
+	Eigen::Vector2d goal;
+	BGMultiPolygon obstacles;
+	PotentialConfig config;
+	std::tuple<Eigen::MatrixXd, Eigen::VectorXd, Eigen::VectorXd> waveFront;
+};
+
+class MyGDAlgorithm : public amp::GDAlgorithm {
+	public:
+		// Consider defining a class constructor to easily tune parameters, for example: 
+		MyGDAlgorithm(double alpha, double epsilon, PotentialConfig config, size_t max_iter = 10000) :
+			alpha(alpha),
+			epsilon(epsilon),
+			config(config),
+			max_iter(max_iter) {}
+
+		// Override this method to solve a given problem.
+		virtual amp::Path2D plan(const amp::Problem2D& problem) override;
+
+		double alpha, epsilon;
+		PotentialConfig config;
+		size_t max_iter;
+		
+		// Add additional member variables here...
 };
