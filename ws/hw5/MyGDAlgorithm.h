@@ -20,7 +20,10 @@ public:
 	// Returns the potential function value (height) for a given 2D point. 
 	virtual double operator()(const Eigen::Vector2d& q) const override;
 
-	Eigen::Vector2d getGradient(const Eigen::Vector2d& x, double h = 1e-3) const override;
+	Eigen::Vector2d getGradient(const Eigen::Vector2d& x) const override;
+
+public:
+	double h = 1e-3;
 
 private:
 	Eigen::Vector2d goal;

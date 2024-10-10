@@ -10,8 +10,14 @@ amp::Path2D MyGDAlgorithm::plan(const amp::Problem2D& problem) {
     
     for (auto iter = 0; iter < max_iter; iter++)
     {
-        Eigen::Vector2d direction = fn.gradient(path.waypoints.back()).normalized();
-        path.waypoints.push_back(path.waypoints.back() - alpha*direction);
+        Eigen::Vector2d next = path.waypoints.back();
+        for (auto step = 0; step < 2; step++)
+        {
+            Eigen::Vector2d direction = fn.getGradient(next).normalized();
+            next -= alpha*direction;
+        }
+        
+        path.waypoints.push_back(next);
         // std::cout << direction.transpose() << " " << path.waypoints.back().transpose() << std::endl;
 
         if ((problem.q_goal - path.waypoints.back()).squaredNorm() < std::pow(epsilon, 2))
@@ -55,17 +61,17 @@ double bilinearInterpolation(const Eigen::MatrixXd& gridValues,
 
     auto[x_index, y_index] = findIndexInGrid(xGrid, yGrid, x, y);
 
-    // Coordinates of the grid cell corners
-    double x1 = xGrid[x_index];
-    double x2 = xGrid[x_index + 1];
-    double y1 = yGrid[y_index];
-    double y2 = yGrid[y_index + 1];
-
     // Function values at the corners
     double fQ11 = gridValues(x_index, y_index);
     double fQ21 = gridValues(x_index, y_index + 1);
     double fQ12 = gridValues(x_index + 1, y_index);
     double fQ22 = gridValues(x_index + 1, y_index + 1);
+    
+    // Coordinates of the grid cell corners
+    double x1 = xGrid[x_index];
+    double x2 = xGrid[x_index + 1];
+    double y1 = yGrid[y_index];
+    double y2 = yGrid[y_index + 1];
 
     // Compute the interpolation weights
     double t_x = (x - x1) / (x2 - x1);
@@ -156,20 +162,21 @@ waveFrontPotential(const amp::Problem2D &problem)
 
 double MyPotentialFunction::operator()(const Eigen::Vector2d& q) const
 {
-    // double U_att = (q - goal).norm() < config.d_star 
-    //     ? config.zetta/2*(q - goal).squaredNorm() 
-    //     : config.d_star*config.zetta*(q - goal).norm() - config.zetta/2*std::pow(config.d_star, 2);
 
-    double U_att = bilinearInterpolation(
+    return bilinearInterpolation(
         std::get<0>(this->waveFront),
         std::get<1>(this->waveFront),
         std::get<2>(this->waveFront),
         q.x(), q.y()
     );
 
+    double U_att = (q - goal).norm() < config.d_star 
+        ? config.zetta/2*(q - goal).squaredNorm() 
+        : config.d_star*config.zetta*(q - goal).norm() - config.zetta/2*std::pow(config.d_star, 2);
+    
     double distance = boost::geometry::distance(obstacles, BGPoint{q.x(), q.y()});
     double U_rep = distance < config.Q_star ? config.eta*(config.Q_star/std::max(distance, 1e-5) - 1) : 0;
-    U_rep = 0;
+
     return U_att + U_rep;
 }
 
@@ -207,24 +214,42 @@ MyPotentialFunction::MyPotentialFunction(const amp::Problem2D &problem, Potentia
 
 }
 
-Eigen::Vector2d MyPotentialFunction::gradient(const Eigen::Vector2d &x, double h) const
+Eigen::Vector2d MyPotentialFunction::getGradient(const Eigen::Vector2d &q) const
 {
-		Eigen::Vector2d grad = Eigen::Vector2d::Zero();
-		Eigen::Vector2d x_perturbed = x;
+    Eigen::Vector2d grad = Eigen::Vector2d::Zero();
+    Eigen::Vector2d x_perturbed = q;
 
-		// Loop over each dimension to compute the partial derivatives
-		for (int i = 0; i < x.size(); ++i) {
-			// Perturb only the i-th component
-			x_perturbed(i) += h;
-			double f_x_plus_h = (*this)(x_perturbed);
-            // std::cout << "\t" << i << " " << f_x_plus_h << " @ " << x_perturbed.transpose() << std::endl;
+    // Loop over each dimension to compute the partial derivatives
+    for (int i = 0; i < q.size(); ++i) {
+    	// Perturb only the i-th component
+    	x_perturbed(i) += h;
+    	double f_x_plus_h = (*this)(x_perturbed);
+        // std::cout << "\t" << i << " " << f_x_plus_h << " @ " << x_perturbed.transpose() << std::endl;
 
-			// Reset the perturbed component
-			x_perturbed(i) = x(i);
+    	// Reset the perturbed component
+    	x_perturbed(i) = q(i);
 
-			// Compute the finite difference for the i-th component
-			grad(i) = (f_x_plus_h - (*this)(x)) / h;
-		}
+    	// Compute the finite difference for the i-th component
+    	grad(i) = (f_x_plus_h - (*this)(q)) / h;
+    }
 
-		return grad;
-	}
+    return grad;
+
+    // auto&[gridValues, xGrid, yGrid] = (this->waveFront);
+
+    // auto[x_index, y_index] = findIndexInGrid(xGrid, yGrid, q.x(), q.y());
+
+    // // Function values at the corners
+    // double fQ11 = gridValues(x_index, y_index);
+    // double fQ21 = gridValues(x_index, y_index + 1);
+    // double fQ12 = gridValues(x_index + 1, y_index);
+    // double fQ22 = gridValues(x_index + 1, y_index + 1);
+
+    // // Coordinates of the grid cell corners
+    // double x1 = xGrid[x_index];
+    // double x2 = xGrid[x_index + 1];
+    // double y1 = yGrid[y_index];
+    // double y2 = yGrid[y_index + 1];
+
+    // return {(fQ12 - fQ11)/(x2 - x1), (fQ21 - fQ11)/(y2 - y1)};
+}
