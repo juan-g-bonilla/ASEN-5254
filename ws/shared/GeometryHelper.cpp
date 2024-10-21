@@ -56,12 +56,10 @@ BGMultiPolygon bufferMultiPolygon(const BGMultiPolygon& multi, float buffer_dist
     return buffered;
 }
 
-std::vector<amp::Polygon> mergePolygons(const std::vector<amp::Polygon>& polygons, float buffer_distance)
+std::vector<amp::Polygon> multiPolygonToAmp(BGMultiPolygon multi)
 {
-    BGMultiPolygon buffered = bufferMultiPolygon(convertPolygonsToMultiPolygon(polygons), buffer_distance);
-
     std::vector<amp::Polygon> result;
-    for (auto&& p : buffered)
+    for (auto&& p : multi)
     {
         std::vector<Eigen::Vector2d> vertices;
 
@@ -73,6 +71,10 @@ std::vector<amp::Polygon> mergePolygons(const std::vector<amp::Polygon>& polygon
 
         result.emplace_back(vertices);
     }
-
     return result;
+}
+
+std::vector<amp::Polygon> mergePolygons(const std::vector<amp::Polygon>& polygons, float buffer_distance)
+{
+    return multiPolygonToAmp(bufferMultiPolygon(convertPolygonsToMultiPolygon(polygons), buffer_distance));
 }

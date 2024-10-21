@@ -11,8 +11,14 @@ using BGPoint = boost::geometry::model::d2::point_xy<double>;
 using BGPolygon = boost::geometry::model::polygon< BGPoint, false >;
 using BGMultiPolygon = boost::geometry::model::multi_polygon<BGPolygon>;
 
-BGMultiPolygon convertPolygonsToMultiPolygon(const std::vector<amp::Polygon>& polygons);
+BGPoint eigenToBGPoint(const Eigen::Vector2d &vec);
+
+BGPolygon convertToBoostPolygon(const std::vector<Eigen::Vector2d> &eigenPoints);
+
+BGMultiPolygon convertPolygonsToMultiPolygon(const std::vector<amp::Polygon> &polygons);
 
 BGMultiPolygon bufferMultiPolygon(const BGMultiPolygon &multi, float buffer_distance);
+
+std::vector<amp::Polygon> multiPolygonToAmp(BGMultiPolygon multi);
 
 std::vector<amp::Polygon> mergePolygons(const std::vector<amp::Polygon>& polygon, float buffer_distance = 0);
