@@ -35,12 +35,12 @@ MyAStarAlgo::GraphSearchResult MyAStarAlgo::search(const amp::ShortestPathProble
             break;
         }
 
-        auto&& children = problem.graph->children(to_analyze);
-        auto&& edge_costs = problem.graph->outgoingEdges(to_analyze);
+        const std::vector<amp::Node>& children = problem.graph->children(to_analyze);
+        const std::vector<cost>& edge_costs = problem.graph->outgoingEdges(to_analyze);
         for (auto i = 0; i < children.size(); i++)
         {
-            auto&& child = children.at(i);
-            auto&& edge_cost = edge_costs.at(i);
+            amp::Node child = children.at(i);
+            double edge_cost = edge_costs.at(i);
 
             if (closed.count(child) > 0) continue;
 
@@ -59,7 +59,7 @@ MyAStarAlgo::GraphSearchResult MyAStarAlgo::search(const amp::ShortestPathProble
         }
     }
 
-    std::cout << "Iters " << iters << std::endl;
+    // std::cout << "Iters " << iters << std::endl;
 
     if (g.count(problem.goal_node) == 0)
     {
