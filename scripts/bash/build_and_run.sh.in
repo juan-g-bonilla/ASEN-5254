@@ -59,6 +59,12 @@ for arg in "$@"; do
             build_type=Debug
             shift 1
             ;;
+        --gdb)
+            echo "Running 'gdb' debugger'"
+            use_gdb=true
+            build_type=Debug
+            shift 1
+            ;;
         *)
             echo "Unknown arg '$arg'"
             exit 1
@@ -79,6 +85,8 @@ if [ $? == 0 ]; then
     cd bin
     if [ "$use_valgrind" = "true" ]; then
         valgrind ./"$executable"
+    elif [ "$use_gdb" = "true" ]; then
+        gdb ./"$executable"
     else
         ./"$executable"
     fi

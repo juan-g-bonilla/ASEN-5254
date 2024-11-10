@@ -9,6 +9,7 @@
 
 using BGPoint = boost::geometry::model::d2::point_xy<double>;
 using BGSegment = boost::geometry::model::segment<BGPoint>;
+using BGLineString = boost::geometry::model::linestring<BGPoint>;
 using BGPolygon = boost::geometry::model::polygon< BGPoint, false >;
 using BGMultiPolygon = boost::geometry::model::multi_polygon<BGPolygon>;
 

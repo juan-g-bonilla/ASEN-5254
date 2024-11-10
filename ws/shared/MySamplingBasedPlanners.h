@@ -7,13 +7,14 @@
 #include "hw/HW7.h"
 
 #include <functional>
+#include <unordered_map>
 
-template<size_t N>
+template<int N>
 std::vector<Eigen::Matrix<double, N, 1>> uniformSamples(size_t n, const Eigen::Matrix<double, N, 2>& boundaries, std::function<bool(const Eigen::Matrix<double, N, 1>&)> rejectFun); 
 
 std::vector<Eigen::Matrix<double, 2, 1>> uniformSamples2D(size_t n, const amp::Environment2D& env); 
 
-template<size_t N>
+template<int N>
 std::vector<std::pair<size_t, size_t>> findConnectionsWithinR(double r, const std::vector<Eigen::Matrix<double, N, 1>>& samples, std::function<bool(const Eigen::Matrix<double, N, 1>&, const Eigen::Matrix<double, N, 1>&)> rejectFun);
 
 std::vector<std::pair<size_t, size_t>> findConnectionsWithinR2D(double r, const std::vector<Eigen::Vector2d>& samples, const amp::Environment2D& env);
@@ -41,17 +42,18 @@ protected:
     bool smoothing; 
 };
 
-template<size_t N>
-std::pair<std::vector<Eigen::Matrix<double, N, 1>>, std::vector<std::pair<size_t, size_t>>> generateRRT(
+template<int N>
+std::tuple<std::vector<Eigen::Matrix<double, N, 1>>, std::unordered_map<size_t, size_t>, bool> generateRRT(
     Eigen::Matrix<double, N, 1> q_init,
     const std::function<Eigen::Matrix<double, N, 1>()>& sampleGenerator,
-    const std::function<bool(const Eigen::Matrix<double, N, 1>&, const Eigen::Matrix<double, N, 1>&)>& pathReject,
+    const std::function<bool(size_t, const Eigen::Matrix<double, N, 1>&, const Eigen::Matrix<double, N, 1>&)>& pathReject,
     const std::function<Eigen::Matrix<double, N, 1>(const Eigen::Matrix<double, N, 1>&, const Eigen::Matrix<double, N, 1>&)>& newFromNearAndRand,
     const std::function<double(const Eigen::Matrix<double, N, 1>&, const Eigen::Matrix<double, N, 1>&)>& distanceFunction,
-    const std::function<bool(const Eigen::Matrix<double, N, 1>&, size_t)>& finishCondition
+    const std::function<bool(const Eigen::Matrix<double, N, 1> &)> &successCondition,
+    size_t maxIters
 );
 
-std::pair<std::vector<Eigen::Vector2d>, std::vector<std::pair<size_t, size_t>>> generateRRT2D(
+std::tuple<std::vector<Eigen::Vector2d>, std::unordered_map<size_t, size_t>, bool> generateRRT2D(
     const amp::Problem2D& problem, double step, double finishRadius, double pGoal, size_t maxIters);
 
 class MyRRT : public amp::GoalBiasRRT2D {
@@ -71,7 +73,7 @@ protected:
     size_t maxIters;
 };
 
-template <size_t N>
+template <int N>
 std::vector<Eigen::Matrix<double, N, 1>> uniformSamples(size_t n, const Eigen::Matrix<double, N, 2> &boundaries, std::function<bool(const Eigen::Matrix<double, N, 1> &)> rejectFun)
 {
     std::vector<Eigen::Matrix<double, N, 1>> result;
@@ -95,7 +97,7 @@ std::vector<Eigen::Matrix<double, N, 1>> uniformSamples(size_t n, const Eigen::M
     return result;
 }
 
-template <size_t N>
+template <int N>
 std::vector<std::pair<size_t, size_t>> findConnectionsWithinR(double r, const std::vector<Eigen::Matrix<double, N, 1>> &samples, std::function<bool(const Eigen::Matrix<double, N, 1> &, const Eigen::Matrix<double, N, 1> &)> rejectFun)
 {
     std::vector<std::pair<size_t, size_t>> result;
@@ -113,23 +115,28 @@ std::vector<std::pair<size_t, size_t>> findConnectionsWithinR(double r, const st
     return result;
 }
 
-template <size_t N>
-std::pair<std::vector<Eigen::Matrix<double, N, 1>>, std::vector<std::pair<size_t, size_t>>> generateRRT(
+template <int N>
+std::tuple<std::vector<Eigen::Matrix<double, N, 1>>, std::unordered_map<size_t, size_t>, bool> generateRRT(
     Eigen::Matrix<double, N, 1> q_init, 
     const std::function<Eigen::Matrix<double, N, 1>()> &sampleGenerator, 
-    const std::function<bool(const Eigen::Matrix<double, N, 1> &, const Eigen::Matrix<double, N, 1> &)> &pathReject, 
+    const std::function<bool(size_t, const Eigen::Matrix<double, N, 1> &, const Eigen::Matrix<double, N, 1> &)> &pathReject, 
     const std::function<Eigen::Matrix<double, N, 1>(const Eigen::Matrix<double, N, 1> &, const Eigen::Matrix<double, N, 1> &)> &newFromNearAndRand, 
     const std::function<double(const Eigen::Matrix<double, N, 1> &, const Eigen::Matrix<double, N, 1> &)> &distanceFunction, 
-    const std::function<bool(const Eigen::Matrix<double, N, 1> &, size_t)> &finishCondition)
+    const std::function<bool(const Eigen::Matrix<double, N, 1> &)> &successCondition,
+    size_t maxIters)
 {
-    std::vector<std::pair<size_t, size_t>> connections;
+    std::unordered_map<size_t, size_t> connections;
+    std::unordered_map<size_t, size_t> path_length;
     std::vector<Eigen::Matrix<double, N, 1>> points;
     points.push_back(q_init);
+    path_length.emplace(0, 0);
 
     size_t iter = 0;
 
     while (true)
     {
+        iter++;
+
         auto rand = sampleGenerator();
         std::vector<double> distances;
         for (auto&& p : points) distances.push_back(distanceFunction(rand, p));
@@ -138,18 +145,56 @@ std::pair<std::vector<Eigen::Matrix<double, N, 1>>, std::vector<std::pair<size_t
         auto newPoint = newFromNearAndRand(near, rand);
         
         // std::cout << "rand=" << rand.transpose() << "  near="<<near.transpose()<< "  new="<<newPoint.transpose()<<std::endl; 
-        if (pathReject(near, newPoint)) continue;
+        if (pathReject(path_length.at(closest_ind), near, newPoint)) continue;
 
         // std::cout << "    Not rejected!" << std::endl;
         auto newPoint_ind = points.size();
         points.push_back(std::move(newPoint));
 
-        connections.emplace_back(closest_ind, newPoint_ind);
+        connections.emplace(newPoint_ind, closest_ind);
+        path_length.emplace(newPoint_ind, path_length.at(closest_ind)+1);
 
-        if (finishCondition(points.back(), iter)) break;
+        if (successCondition(points.back()))
+        {
+            // std::cout << "SUCCESS " << points.back().transpose() << std::endl;
+            return {std::move(points), std::move(connections), true};
+        }
+    // std::cout << "NOT YET "<< iter<< " " << points.back().transpose() << std::endl;
 
-        iter++;
+
+        if (iter > maxIters)
+        {
+            return {std::move(points), std::move(connections), false};
+        }
+    }    
+}
+
+template<int N, typename T>
+auto graphFromPointsAndConnections(
+    const std::vector<Eigen::Matrix<double, N, 1>>& samples, 
+    const T& connections
+)
+{
+    auto graph = std::make_shared<amp::Graph<double>>();
+    for (auto&&[a, b] : connections)
+    {
+        double distance = (samples.at(a) - samples.at(b)).norm();
+        graph->connect(a, b, distance);
+        graph->connect(b, a, distance);
     }
+    return graph;
+}
 
-    return {std::move(points), std::move(connections)};
+template<int N>
+auto graphPathToWaypoints(
+    const std::vector<Eigen::Matrix<double, N, 1>>& samples, 
+    const std::list<amp::Node>& nodePath
+)
+{
+    std::vector<Eigen::Matrix<double, N, 1>> waypoints;
+    for (auto&& node : nodePath)
+    {
+        waypoints.push_back(samples.at(node));
+    }
+    return waypoints;
 }

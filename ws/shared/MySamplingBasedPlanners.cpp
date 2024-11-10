@@ -3,39 +3,6 @@
 #include <random>
 #include <chrono>
 
-namespace
-{
-    template<size_t N>
-    auto graphFromPointsAndConnections(
-        const std::vector<Eigen::Matrix<double, N, 1>>& samples, 
-        const std::vector<std::pair<size_t, size_t>>& connections
-    )
-    {
-        auto graph = std::make_shared<amp::Graph<double>>();
-        for (auto&&[a, b] : connections)
-        {
-            double distance = (samples.at(a) - samples.at(b)).norm();
-            graph->connect(a, b, distance);
-            graph->connect(b, a, distance);
-        }
-        return graph;
-    }
-
-    template<size_t N>
-    auto graphPathToWaypoints(
-        const std::vector<Eigen::Matrix<double, N, 1>>& samples, 
-        const std::list<amp::Node>& nodePath
-    )
-    {
-        std::vector<Eigen::Matrix<double, N, 1>> waypoints;
-        for (auto&& node : nodePath)
-        {
-            waypoints.push_back(samples.at(node));
-        }
-        return waypoints;
-    }
-}
-
 amp::Path2D MyPRM::plan(const amp::Problem2D& problem) 
 {
     return detailedPlan(problem).path;
@@ -106,26 +73,21 @@ GraphBasedResult MyRRT::detailedPlan(const amp::Problem2D & problem)
 {
     auto tic = std::chrono::high_resolution_clock::now();
 
-    auto&&[samples, connections] = generateRRT2D(problem, step, finishRadius, pGoal, maxIters);
+    auto&&[samples, connections, success] = generateRRT2D(problem, step, finishRadius, pGoal, maxIters);
 
-    // Add goal and connect it to the last added sample
-    connections.emplace_back(samples.size()-1, samples.size());
-    samples.push_back(problem.q_goal);
-
-    // std::cerr << "HERE 2" << std::endl;
-    auto graph = graphFromPointsAndConnections<2>(samples, connections);
-
-    // std::cerr << "HERE 3" << std::endl;
-
-    amp::ShortestPathProblem graphProblem{graph, 0, amp::Node(samples.size()-1)};
-    auto nodePlan = graphSearch->search(graphProblem, {});
-    // std::cerr << "HERE 4" << std::endl;
+    std::list<amp::Node> node_path;
+    node_path.push_front(samples.size()-1); 
+    while (connections.count(node_path.front()) > 0)
+    {
+        node_path.push_front(connections.at(node_path.front())); 
+    }
 
     amp::Path2D path;
-    path.valid = nodePlan.success;
+    path.valid = success;
     if (path.valid)
     {
-        path.waypoints = graphPathToWaypoints<2>(samples, nodePlan.node_path);
+        path.waypoints = graphPathToWaypoints<2>(samples, node_path);
+        path.waypoints.push_back(problem.q_goal);
     }
 
     auto toc = std::chrono::high_resolution_clock::now();
@@ -133,7 +95,7 @@ GraphBasedResult MyRRT::detailedPlan(const amp::Problem2D & problem)
 
     return GraphBasedResult{
         path, 
-        graph, 
+        graphFromPointsAndConnections<2>(samples, connections),
         [samples = std::move(samples)](amp::Node node){return samples.at(node);},
         runtime.count()*1000
     };
@@ -165,7 +127,7 @@ std::vector<std::pair<size_t,size_t>> findConnectionsWithinR2D(double r, const s
     return findConnectionsWithinR<2>(r, samples, rejectFun);
 }
 
-std::pair<std::vector<Eigen::Vector2d>, std::vector<std::pair<size_t, size_t>>> generateRRT2D(
+std::tuple<std::vector<Eigen::Vector2d>, std::unordered_map<size_t, size_t>, bool> generateRRT2D(
     const amp::Problem2D &problem, double step, double finishRadius, double pGoal, size_t maxIters)
 {
     auto obstacles = convertPolygonsToMultiPolygon(problem.obstacles);
@@ -180,7 +142,7 @@ std::pair<std::vector<Eigen::Vector2d>, std::vector<std::pair<size_t, size_t>>> 
 
             return uniformSamples2D(1, problem).at(0);
         },
-        [&obstacles](const Eigen::Vector2d& sampleA, const Eigen::Vector2d& sampleB)
+        [&obstacles](size_t /*t*/, const Eigen::Vector2d& sampleA, const Eigen::Vector2d& sampleB)
         {
             return boost::geometry::intersects(
                 BGSegment{eigenToBGPoint(sampleA), eigenToBGPoint(sampleB)}, 
@@ -197,9 +159,10 @@ std::pair<std::vector<Eigen::Vector2d>, std::vector<std::pair<size_t, size_t>>> 
         {
             return (sampleA - sampleB).squaredNorm();
         },
-        [finishRadius, maxIters, &q_goal = problem.q_goal](const Eigen::Vector2d& sample, size_t iters)
+        [finishRadius, &q_goal = problem.q_goal](const Eigen::Vector2d& sample)
         {
-            return (sample - q_goal).squaredNorm() < std::pow(finishRadius, 2) || iters > maxIters;
-        }
+            return (sample - q_goal).squaredNorm() < std::pow(finishRadius, 2);
+        },
+        maxIters
     );
 }
