@@ -77,10 +77,7 @@ std::tuple<std::vector<Eigen::VectorXd>, std::unordered_map<size_t, size_t>, boo
             }
             return newPoint;
         },
-        [](const Eigen::VectorXd& sampleA, const Eigen::VectorXd& sampleB)
-        {
-            return (sampleA - sampleB).squaredNorm();
-        },
+        std::nullopt,
         [finishRadius, &q_goal = total_q_goal](const Eigen::VectorXd& sample)
         {
             for (size_t i = 0; i < sample.size()/2; ++i)
@@ -191,10 +188,7 @@ std::tuple<std::vector<Eigen::Vector2d>,std::unordered_map<size_t,size_t>,bool> 
             // std::cout << "    nearPoint " << nearPoint.transpose() << " randPoint=" << randPoint.transpose() << "  step=" << step << "  res=" <<(nearPoint + step*direction).transpose() << std::endl;
             return Eigen::Vector2d(nearPoint + step*direction);
         },
-        [](const Eigen::Vector2d& sampleA, const Eigen::Vector2d& sampleB)
-        {
-            return (sampleA - sampleB).squaredNorm();
-        },
+        std::nullopt,
         [finishRadius, q_goal](const Eigen::Vector2d& sample)
         {
             return (sample - q_goal).squaredNorm() < std::pow(finishRadius, 2);

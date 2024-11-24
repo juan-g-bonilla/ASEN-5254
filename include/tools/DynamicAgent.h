@@ -14,6 +14,8 @@ struct AgentDimensions {
 
 class DynamicAgent {
     public:
+        static constexpr size_t N = 0;
+
         /// @brief Propagate the state forward according to dynamics model
         /// @param state Initial state (updated in place)  
         /// @param control Control input 

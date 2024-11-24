@@ -25,3 +25,9 @@ def make_box_plot(data : list, labels : list, title : str, xlabel : str, ylabel 
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
 
+def make_line_plot(t : list, data : list, title : str, xlabel : str, ylabel : str):
+    ax = plt.gca() 
+    ax.plot(t, data)
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)

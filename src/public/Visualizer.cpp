@@ -252,6 +252,15 @@ void amp::Visualizer::showFigures() {
     ampprivate::pybridge::ScriptCaller::call("FigureHandler", "show_figure", std::make_tuple());
 }
 
+void amp::Visualizer::saveFigures() {
+    ampprivate::pybridge::ScriptCaller::call("FigureHandler", "save_figure", std::make_tuple());
+}
+
+void amp::Visualizer::setTitle(const std::string& title) {
+    std::unique_ptr<ampprivate::pybridge::PythonObject> title_arg = ampprivate::pybridge::makeString(title);
+    ampprivate::pybridge::ScriptCaller::call("FigureHandler", "set_title", std::make_tuple(title_arg->get()));
+}
+
 void amp::Visualizer::newFigure() {
     ampprivate::pybridge::ScriptCaller::call("FigureHandler", "new_figure", std::make_tuple());
 }
@@ -534,6 +543,38 @@ void amp::Visualizer::makeBarGraph(const std::vector<double>& values, const std:
     std::unique_ptr<ampprivate::pybridge::PythonObject> ylabel_arg = ampprivate::pybridge::makeString(ylabel);
 
     ampprivate::pybridge::ScriptCaller::call("Plotter", "make_bar_graph", std::make_tuple(values_arg->get(), labels_arg->get(), title_arg->get(), xlabel_arg->get(), ylabel_arg->get()));
+}
+
+void amp::Visualizer::makeLinePlot(const std::vector<double>& t, const std::vector<double>& values,  const std::string& title, const std::string& xlabel, const std::string& ylabel) {
+    ASSERT(t.size() == values.size(), "Number of labels does not match number of values");
+    newFigure();
+
+    // t
+    std::vector<std::unique_ptr<ampprivate::pybridge::PythonObject>> t_py_objects;
+    t_py_objects.reserve(t.size());
+    for (double value : t) {
+        t_py_objects.push_back(ampprivate::pybridge::makeScalar(value));
+    }
+    std::unique_ptr<ampprivate::pybridge::PythonObject> t_arg = ampprivate::pybridge::makeList(std::move(t_py_objects));
+
+    // Values
+    std::vector<std::unique_ptr<ampprivate::pybridge::PythonObject>> values_py_objects;
+    values_py_objects.reserve(values.size());
+    for (double value : values) {
+        values_py_objects.push_back(ampprivate::pybridge::makeScalar(value));
+    }
+    std::unique_ptr<ampprivate::pybridge::PythonObject> values_arg = ampprivate::pybridge::makeList(std::move(values_py_objects));
+
+    // Title
+    std::unique_ptr<ampprivate::pybridge::PythonObject> title_arg = ampprivate::pybridge::makeString(title);
+
+    // X-label
+    std::unique_ptr<ampprivate::pybridge::PythonObject> xlabel_arg = ampprivate::pybridge::makeString(xlabel);
+
+    // Y-label
+    std::unique_ptr<ampprivate::pybridge::PythonObject> ylabel_arg = ampprivate::pybridge::makeString(ylabel);
+
+    ampprivate::pybridge::ScriptCaller::call("Plotter", "make_line_plot", std::make_tuple(t_arg->get(), values_arg->get(), title_arg->get(), xlabel_arg->get(), ylabel_arg->get()));
 }
 
 #endif

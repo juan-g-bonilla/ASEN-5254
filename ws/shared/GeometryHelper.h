@@ -1,3 +1,5 @@
+#pragma once
+
 #include "AMPCore.h"
 
 #include <boost/geometry.hpp>

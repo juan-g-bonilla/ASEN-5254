@@ -73,7 +73,10 @@ GraphBasedResult MyRRT::detailedPlan(const amp::Problem2D & problem)
 {
     auto tic = std::chrono::high_resolution_clock::now();
 
-    auto&&[samples, connections, success] = generateRRT2D(problem, step, finishRadius, pGoal, maxIters);
+    RRTResult<2,2> rrt = generateRRT2D(problem, step, finishRadius, pGoal, maxIters);
+    auto& samples = rrt.points;
+    auto& connections = rrt.connections;
+    auto success = rrt.success;
 
     std::list<amp::Node> node_path;
     node_path.push_front(samples.size()-1); 
@@ -127,40 +130,35 @@ std::vector<std::pair<size_t,size_t>> findConnectionsWithinR2D(double r, const s
     return findConnectionsWithinR<2>(r, samples, rejectFun);
 }
 
-std::tuple<std::vector<Eigen::Vector2d>, std::unordered_map<size_t, size_t>, bool> generateRRT2D(
+RRTResult<2,2> generateRRT2D(
     const amp::Problem2D &problem, double step, double finishRadius, double pGoal, size_t maxIters)
 {
     auto obstacles = convertPolygonsToMultiPolygon(problem.obstacles);
 
-    return generateRRT<2>(
+    return generateRRT<2, 2>(
         problem.q_init,
-        [pGoal, &problem](){
+        [pGoal, &problem]() {
             std::random_device rd;
             std::mt19937 gen(rd());
             std::uniform_real_distribution<> dis(0.0, 1.0);
             if (dis(gen) < pGoal) return problem.q_goal;
-
             return uniformSamples2D(1, problem).at(0);
         },
-        [&obstacles](size_t /*t*/, const Eigen::Vector2d& sampleA, const Eigen::Vector2d& sampleB)
-        {
-            return boost::geometry::intersects(
-                BGSegment{eigenToBGPoint(sampleA), eigenToBGPoint(sampleB)}, 
-                obstacles
-            );
+        [&obstacles](size_t /*t*/, const Eigen::Vector2d& sampleA, const Eigen::Vector2d& sampleB) -> std::optional<Eigen::Vector2d> {
+            if (boost::geometry::intersects(
+                    BGSegment{eigenToBGPoint(sampleA), eigenToBGPoint(sampleB)},
+                    obstacles
+                )) {
+                return std::nullopt;
+            }
+            return sampleB;
         },
-        [step](const Eigen::Vector2d& nearPoint, const Eigen::Vector2d& randPoint)
-        {
-            Eigen::Vector2d direction = (randPoint-nearPoint).normalized();
-            // std::cout << "    nearPoint " << nearPoint.transpose() << " randPoint=" << randPoint.transpose() << "  step=" << step << "  res=" <<(nearPoint + step*direction).transpose() << std::endl;
-            return Eigen::Vector2d(nearPoint + step*direction);
+        [step](const Eigen::Vector2d& nearPoint, const Eigen::Vector2d& randPoint) {
+            Eigen::Vector2d direction = (randPoint - nearPoint).normalized();
+            return Eigen::Vector2d{nearPoint + step * direction};
         },
-        [](const Eigen::Vector2d& sampleA, const Eigen::Vector2d& sampleB)
-        {
-            return (sampleA - sampleB).squaredNorm();
-        },
-        [finishRadius, &q_goal = problem.q_goal](const Eigen::Vector2d& sample)
-        {
+        std::nullopt,  // Optional distance scale if needed
+        [finishRadius, &q_goal = problem.q_goal](const Eigen::Vector2d& sample) {
             return (sample - q_goal).squaredNorm() < std::pow(finishRadius, 2);
         },
         maxIters

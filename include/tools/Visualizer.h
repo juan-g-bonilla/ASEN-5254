@@ -179,8 +179,19 @@ class Visualizer {
         static void makeBarGraph(const std::vector<double>& values, const std::vector<std::string>& labels, 
                                 const std::string& title = std::string(), const std::string& xlabel = std::string(), const std::string& ylabel = std::string());
 
+        static void makeLinePlot(const std::vector<double>& t, const std::vector<double>& values, 
+                                const std::string& title = std::string(), const std::string& xlabel = std::string(), const std::string& ylabel = std::string());
+
+
         /// @brief Show all figures that were created with `makeFigure()`
         static void showFigures();
+
+        static void saveFigures();
+
+        static void setTitle(const std::string& title);
+
+        template <typename FXN>
+        static void createAxes(const Graph<double>& map, const FXN& getCoordinateFromNode);
 
     private:
         static void createAxes(const Environment2D& env);
@@ -199,8 +210,7 @@ class Visualizer {
         static void createAxes(const LinkManipulator2D& link_manipulator, const ManipulatorState& state, double* cmap_scale = nullptr, bool colliding = false);
         static void createAxes(const GridCSpace2D& cspace);
         static void createAxes(const PotentialFunction2D& potential_function, const Problem2D& prob, std::size_t n_grid, bool vector, double u_min, double u_max);
-        template <typename FXN>
-        static void createAxes(const Graph<double>& map, const FXN& getCoordinateFromNode);
+        
         static void newFigure();
 };
 }

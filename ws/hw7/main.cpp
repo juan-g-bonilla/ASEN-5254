@@ -171,7 +171,7 @@ int main(int argc, char** argv) {
     }
 
     // Ex 2
-    if (false) {
+    if (true) {
         auto titles = std::vector{"HW5", "HW2 W1", " HW2 W2"};
         const auto problems = std::vector{problemHW5, HW2::getWorkspace1(), HW2::getWorkspace2()};
         for (auto i = 0; i < titles.size(); i++)
@@ -181,7 +181,7 @@ int main(int argc, char** argv) {
 
             MyRRT rrt{0.5, 0.25,  0.05, aStarAlgo, 5000};
             auto result = rrt.detailedPlan(problem);
-            Visualizer::makeFigure(problem, result.path, *result.graph, result.nodePos);
+            // Visualizer::makeFigure(problem, result.path, *result.graph, result.nodePos);
             std::cout << "Ex 2 " << title << " length: " << (result.path.valid ? result.path.length() : -1) << std::endl;
 
             std::vector<std::pair<double, double>> step_pGoals = {
@@ -193,10 +193,10 @@ int main(int argc, char** argv) {
                 {1, 0.1},
             };
             
-            auto res1 = benchmarkRRT(problem, step_pGoals, aStarAlgo, false, 100);
-            res1.title = "Exercise 2), ";
-            res1.title += title;
-            res1.makeFigures();
+            // auto res1 = benchmarkRRT(problem, step_pGoals, aStarAlgo, false, 100);
+            // res1.title = "Exercise 2), ";
+            // res1.title += title;
+            // res1.makeFigures();
             
             Visualizer::showFigures();
         }
@@ -212,6 +212,6 @@ int main(int argc, char** argv) {
     
 
     // Grade method
-    HW7::grade<MyPRM, MyRRT>("Juan.GarciaBonilla@colorado.edu", argc, argv, std::make_tuple(1000, 2, aStarAlgo, false), std::make_tuple(0.5, 0.25,  0.05, aStarAlgo, 5000));
+    // HW7::grade<MyPRM, MyRRT>("Juan.GarciaBonilla@colorado.edu", argc, argv, std::make_tuple(1000, 2, aStarAlgo, false), std::make_tuple(0.5, 0.25,  0.05, aStarAlgo, 5000));
     return 0;
 }
