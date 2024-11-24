@@ -57,8 +57,9 @@ int main(int argc, char** argv)
     {
         MyKinoRRT kino_planner{20, 5000000};
         auto result = kino_planner.detailedPlan(problem, *agent); 
+        if (!result.path.valid) continue;
         Visualizer::makeFigure(problem, result.path, false); // Set to 'true' to render animation        
-        // Visualizer::createAxes(*result.graph, result.nodePos);
+        Visualizer::showFigures();
     }
     Visualizer::showFigures();
 }
